@@ -7,7 +7,7 @@ const props = defineProps<{
   songs: SongStatus[];
 }>();
 
-const emit = defineEmits(['add-song', 'download']);
+const emit = defineEmits(['add-song', 'download', 'delete-song', 'reorder-songs', 'preview-song']);
 
 const newSongName = ref('');
 const inputRef = ref<HTMLInputElement | null>(null);
@@ -42,6 +42,30 @@ const getStatusClass = (status: string) => {
 const hasDownloadableSongs = () => {
   return props.songs.some(s => s.status === 'downloaded');
 };
+
+const draggedIndex = ref<number | null>(null);
+
+const onDragStart = (event: DragEvent, index: number) => {
+  draggedIndex.value = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    // Set a transparent image or just let the browser handle the ghost image
+  }
+};
+
+const onDragOver = (event: DragEvent) => {
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+};
+
+const onDrop = (index: number) => {
+  if (draggedIndex.value !== null && draggedIndex.value !== index) {
+    emit('reorder-songs', draggedIndex.value, index);
+  }
+  draggedIndex.value = null;
+};
 </script>
 
 <template>
@@ -58,8 +82,7 @@ const hasDownloadableSongs = () => {
 
       <div class="content">
         <div class="input-section">
-          <div class="input-card">
-            <h2>Add Songs</h2>
+          <div class="main-card">
             <div class="input-group">
               <input ref="inputRef" v-model="newSongName" placeholder="Enter song name and press Enter..."
                 @keyup.enter="handleAdd" class="song-input" />
@@ -67,12 +90,48 @@ const hasDownloadableSongs = () => {
                 <span>Add</span>
               </button>
             </div>
-          </div>
 
-          <div v-if="props.songs.length > 0" class="songs-card">
-            <div class="songs-header">
-              <h3>Songs ({{ props.songs.length }})</h3>
-              <button @click="$emit('download')" class="download-btn" :disabled="!hasDownloadableSongs()">
+            <div v-if="props.songs.length > 0" class="songs-section">
+
+              <div class="songs-list">
+                <div v-for="(song, index) in props.songs" :key="song.id" class="song-item"
+                  :class="[getStatusClass(song.status), { 'dragging': draggedIndex === index }]" draggable="true"
+                  @dragstart="onDragStart($event, index)" @dragover="onDragOver" @drop="onDrop(index)">
+                  <div class="drag-handle">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="8" y1="6" x2="21" y2="6"></line>
+                      <line x1="8" y1="12" x2="21" y2="12"></line>
+                      <line x1="8" y1="18" x2="21" y2="18"></line>
+                      <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                      <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                      <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                    </svg>
+                  </div>
+                  <div class="song-info">
+                    <span class="song-icon">{{ getStatusIcon(song.status) }}</span>
+                    <div class="song-details">
+                      <span class="song-name">{{ song.name }}</span>
+                      <span v-if="song.message" class="song-message">{{ song.message }}</span>
+                    </div>
+                  </div>
+                  <div v-if="['searching', 'downloading'].includes(song.status)" class="spinner"></div>
+                  <button v-if="song.status === 'downloaded'" @click="$emit('preview-song', song.id)"
+                    class="action-btn preview-btn" title="Preview PDF">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                  <button @click="$emit('delete-song', song.id)" class="action-btn delete-btn" title="Remove song">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <button @click="$emit('download')" class="download-btn-bottom" :disabled="!hasDownloadableSongs()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="7 10 12 15 17 10" />
@@ -82,24 +141,11 @@ const hasDownloadableSongs = () => {
               </button>
             </div>
 
-            <div class="songs-list">
-              <div v-for="song in props.songs" :key="song.id" class="song-item" :class="getStatusClass(song.status)">
-                <div class="song-info">
-                  <span class="song-icon">{{ getStatusIcon(song.status) }}</span>
-                  <div class="song-details">
-                    <span class="song-name">{{ song.name }}</span>
-                    <span v-if="song.message" class="song-message">{{ song.message }}</span>
-                  </div>
-                </div>
-                <div v-if="['searching', 'downloading'].includes(song.status)" class="spinner"></div>
-              </div>
+            <div v-else class="empty-state-inline">
+              <div class="empty-icon">📝</div>
+              <p>No songs added yet</p>
+              <span class="empty-hint">Start by entering a song name above</span>
             </div>
-          </div>
-
-          <div v-else class="empty-state">
-            <div class="empty-icon">📝</div>
-            <p>No songs added yet</p>
-            <span class="empty-hint">Start by entering a song name above</span>
           </div>
         </div>
       </div>
@@ -152,15 +198,14 @@ const hasDownloadableSongs = () => {
   gap: 1.5rem;
 }
 
-.input-card,
-.songs-card {
+.main-card {
   background: white;
   border-radius: 16px;
   padding: 1.5rem;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
-.input-card h2 {
+.main-card h2 {
   font-size: 1.25rem;
   font-weight: 600;
   color: #1a202c;
@@ -179,6 +224,7 @@ const hasDownloadableSongs = () => {
   border-radius: 12px;
   font-size: 1rem;
   color: #2d3748;
+  background-color: white;
   transition: all 0.2s;
   outline: none;
 }
@@ -212,43 +258,47 @@ const hasDownloadableSongs = () => {
   cursor: not-allowed;
 }
 
-.songs-card h3 {
+.songs-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #f7fafc;
+}
+
+.songs-section h3 {
   font-size: 1.25rem;
   font-weight: 600;
   color: #1a202c;
 }
 
 .songs-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid #f7fafc;
+  margin-bottom: 1rem;
 }
 
-.download-btn {
+.download-btn-bottom {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 14px 20px;
   background: #48bb78;
   color: white;
   border: none;
-  border-radius: 10px;
-  font-size: 0.95rem;
+  border-radius: 12px;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.download-btn:hover:not(:disabled) {
+.download-btn-bottom:hover:not(:disabled) {
   background: #38a169;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(72, 187, 120, 0.4);
 }
 
-.download-btn:disabled {
+.download-btn-bottom:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   background: #cbd5e0;
@@ -269,6 +319,25 @@ const hasDownloadableSongs = () => {
   border-radius: 12px;
   border-left: 4px solid #cbd5e0;
   transition: all 0.2s;
+  cursor: grab;
+}
+
+.song-item:active {
+  cursor: grabbing;
+}
+
+.song-item.dragging {
+  opacity: 0.5;
+  background: #e2e8f0;
+  border-style: dashed;
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  color: #a0aec0;
+  margin-right: 12px;
+  cursor: grab;
 }
 
 .song-item:hover {
@@ -324,6 +393,30 @@ const hasDownloadableSongs = () => {
   color: #718096;
 }
 
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #a0aec0;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 4px;
+}
+
+.delete-btn:hover {
+  background: #fed7d7;
+  color: #e53e3e;
+}
+
+.preview-btn:hover {
+  background: #bee3f8;
+  color: #3182ce;
+}
+
 .spinner {
   width: 20px;
   height: 20px;
@@ -339,22 +432,22 @@ const hasDownloadableSongs = () => {
   }
 }
 
-.empty-state {
-  background: white;
-  border-radius: 16px;
-  padding: 4rem 2rem;
+.empty-state-inline {
+  margin-top: 1.5rem;
+  padding: 3rem 2rem;
   text-align: center;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  background: #f7fafc;
+  border-radius: 12px;
 }
 
 .empty-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
   opacity: 0.5;
 }
 
-.empty-state p {
-  font-size: 1.25rem;
+.empty-state-inline p {
+  font-size: 1.125rem;
   font-weight: 600;
   color: #2d3748;
   margin-bottom: 0.5rem;
@@ -362,7 +455,7 @@ const hasDownloadableSongs = () => {
 
 .empty-hint {
   color: #718096;
-  font-size: 0.95rem;
+  font-size: 0.875rem;
 }
 
 @media (max-width: 768px) {
@@ -384,17 +477,6 @@ const hasDownloadableSongs = () => {
 
   .add-btn {
     width: 100%;
-  }
-
-  .songs-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .download-btn {
-    width: 100%;
-    justify-content: center;
   }
 
   .song-item {

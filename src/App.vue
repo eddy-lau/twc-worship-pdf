@@ -62,6 +62,26 @@ const handleAddSong = (name: string) => {
   processSong(song.id);
 };
 
+const handleDeleteSong = (id: number) => {
+  songs.value = songs.value.filter(s => s.id !== id);
+};
+
+const handleReorderSongs = (fromIndex: number, toIndex: number) => {
+  const item = songs.value.splice(fromIndex, 1)[0];
+  if (item) {
+    songs.value.splice(toIndex, 0, item);
+  }
+};
+
+const handlePreviewSong = (id: number) => {
+  const song = songs.value.find(s => s.id === id);
+  if (song && song.data) {
+    const blob = new Blob([song.data], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  }
+};
+
 const handleDownload = async () => {
   const pdfBuffers = songs.value
     .filter(s => s.status === 'downloaded' && s.data)
@@ -70,7 +90,7 @@ const handleDownload = async () => {
   if (pdfBuffers.length > 0) {
     try {
       const mergedPdf = await mergePdfs(pdfBuffers);
-      downloadPdf(mergedPdf, 'worship-songs.pdf');
+      downloadPdf(mergedPdf, '詩歌.pdf');
     } catch (error) {
       console.error('Merge error:', error);
       alert('Failed to merge PDFs');
@@ -84,7 +104,9 @@ const handleDownload = async () => {
 <template>
   <main>
     <LoginView v-if="currentView === 'login'" @login-success="handleLoginSuccess" />
-    <SongInput v-else-if="currentView === 'main'" :songs="songs" @add-song="handleAddSong" @download="handleDownload" />
+    <SongInput v-else-if="currentView === 'main'" :songs="songs" @add-song="handleAddSong"
+      @delete-song="handleDeleteSong" @reorder-songs="handleReorderSongs" @preview-song="handlePreviewSong"
+      @download="handleDownload" />
   </main>
 </template>
 

@@ -1,5 +1,6 @@
 // src/services/pdf.ts
 import { PDFDocument } from 'pdf-lib';
+import { saveAs } from 'file-saver';
 
 export const mergePdfs = async (pdfBuffers: ArrayBuffer[]): Promise<Uint8Array> => {
   const mergedPdf = await PDFDocument.create();
@@ -14,11 +15,6 @@ export const mergePdfs = async (pdfBuffers: ArrayBuffer[]): Promise<Uint8Array> 
 };
 
 export const downloadPdf = (pdfBytes: Uint8Array, filename: string) => {
-  const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
+  saveAs(blob, filename);
 };
